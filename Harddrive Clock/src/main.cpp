@@ -10,8 +10,8 @@ https://techtutorialsx.com/2016/12/11/esp8266-external-interrupts/#comments
 */
 
 // wireless network data
-const char *ssid     = "watkins";
-const char *password = "abc123ab";
+const char *ssid     = "SSID";
+const char *password = "PASSWORD";
 
 const long utcOffsetInSeconds = - 14400; // -4 hrs with daylight harvesting, -18000 without
 
