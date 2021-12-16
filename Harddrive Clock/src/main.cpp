@@ -10,8 +10,8 @@ https://techtutorialsx.com/2016/12/11/esp8266-external-interrupts/#comments
 */
 
 // wireless network data
-const char *ssid     = "SSID";
-const char *password = "PASSWORD";
+const char *ssid     = "watkins";
+const char *password = "abc123ab";
 
 const long utcOffsetInSeconds = - 14400; // -4 hrs with daylight harvesting, -18000 without
 
@@ -32,9 +32,6 @@ int lastVal = 0;
 
 volatile byte interruptCounter = 0;
 
-// int thisInterrupt = 0;
-// int lastInterrupt = 0;
-
 volatile unsigned long clockCount;
 volatile unsigned long lastClockCount;
 unsigned long thisClockCount;
@@ -46,16 +43,10 @@ unsigned long testStart;
 unsigned long testEnd;
 // temp
 
-
 unsigned long revoAvg = 0; // average clock cycles per revolution, rolling average of revoLen values
-// const uint8_t revoLen = 6; // number of values used to average clock cycles per revolution
-// unsigned long revoArray[revoLen]; // declaring array
-// unsigned long revoSum = 0;
-// uint8_t revoIndex = 0;
 
 // tenths
 unsigned tenths = 0;
-//int secTenths = 0;
 unsigned lastSec = 0;
 
 // seconds hand
@@ -87,21 +78,20 @@ char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 
-
 void setup() {
   Serial.begin(115200);
   myMotor.attach(servoPin);
   pinMode(interruptPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interruptPin), detectsRev, FALLING);
 	pinMode(LEDpin, OUTPUT);
-  analogWriteFreq(25000); // 1 – 1000Khz
+  analogWriteFreq(45000); // 1 – 1000Khz
 
   // get the motor started, ESC needs full throttle, then zero throttle signal to arm
-  delay(1500);
+  delay(1250);
   myMotor.write(180);
-  delay(750);
+  delay(650);
   myMotor.write(0);
-  delay(750);
+  delay(650);
   myMotor.write(55);
 
 // NTP
@@ -123,11 +113,9 @@ void loop() {
     revoTime = clockCount - lastClockCount;
     lastClockCount = clockCount;
     // testStart = ESP.getCycleCount();
-    // revoAvg = movingAvg(revoArray, &revoSum, revoIndex, revoLen, revoTime);
-    // revoIndex = (revoIndex + 1) % revoLen;
     revoAvg = revoTime;
     // revoAvg = 4 000 000 when spinning as slow as possible
-    offset = revoAvg * 0.28; // higher, farther counter-clockwise .22 ahead by 3 sec .25 ahead by 1 sec
+    offset = revoAvg * 0.28; // higher = counter-clockwise shift. example: .22 = ahead by 3 sec .25 = ahead by 1 sec
     // testEnd = ESP.getCycleCount();
   }
 
@@ -150,10 +138,7 @@ void loop() {
       }
       else
         tenths = (tenths + 1) % 20;
-      
-      // sec = 15;
-      //secTenths = sec + tenths; // increment in range from 0 - 9
-      // Serial.println((revoAvg/600) * tenths);
+
       secStart = wrap((revoAvg * sec)/60 - ((revoAvg/1200) * tenths) + offset, revoAvg / 480, revoAvg, false);
       secStop  = wrap((revoAvg * sec)/60 - ((revoAvg/1200) * tenths) + offset, revoAvg / 480, revoAvg,  true);
 
@@ -168,8 +153,6 @@ void loop() {
       hrsStop  = wrap(((revoAvg * hrs) / 12) + ((revoAvg * mins) / 720) + ((revoAvg * sec) / 43200) + offset, revoAvg / 24, revoAvg, true);
     }
 
-    // range: 62-145
-    // 700 - 8900 rpm
     speedInput(myMotor);
     // Serial.print("test: ");
     // Serial.println(testEnd - testStart);
@@ -203,7 +186,6 @@ unsigned long wrap(unsigned long center, unsigned long wing, unsigned long ceili
 }
 
 void setHand(unsigned long timeAtCall, unsigned long startTime, unsigned long stopTime, boolean *isON, int bright, boolean other1ON, int other1Brt, boolean other2ON, int other2Brt){
-  // noInterrupts();
   if(startTime < stopTime){
     if(timeAtCall >= startTime && timeAtCall < stopTime){
       if(!*isON){
@@ -250,23 +232,10 @@ IRAM_ATTR void detectsRev() {
   clockCount=ESP.getCycleCount();
 }
 
-unsigned long movingAvg(unsigned long *ptrArrNumbers, unsigned long *ptrSum, uint8_t pos, uint16_t len, unsigned long nextNum)
-{
-  //Subtract the oldest number from the prev sum, add the new number
-  *ptrSum = *ptrSum - ptrArrNumbers[pos] + nextNum;
-  //Assign the nextNum to the position in the array
-  ptrArrNumbers[pos] = nextNum;
-  //return the average
-  return *ptrSum / len;
-}
-
 void speedInput(Servo& myMotor) {
-  // 7 - 1024
-  // 60*1/(4600000/80000000) = RPM
   int val = map(analogRead(A0),1024,7,54,180);
   if (val != lastVal){
     lastVal = val;
     myMotor.write(val);
-    // Serial.println(analogRead(A0));
   }
 }
