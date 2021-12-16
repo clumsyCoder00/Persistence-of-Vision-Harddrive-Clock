@@ -7,4 +7,4 @@ Persistence of Vision Harddrive Clock
 
 #Components  
 - Microcontroller is an ESP8266 (Wemos D1 mini)  
-- Using a hall effect sensor (OH090U) to sense disk location.  
+- Using a hall effect sensor (OH090U) to sense disk rotation, position, speed.  
