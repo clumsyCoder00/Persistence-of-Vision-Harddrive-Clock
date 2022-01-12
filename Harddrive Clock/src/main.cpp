@@ -10,8 +10,8 @@ https://techtutorialsx.com/2016/12/11/esp8266-external-interrupts/#comments
 */
 
 // wireless network data
-const char *ssid     = "SSID";
-const char *password = "PASSWORD";
+const char *ssid     = "watkins";
+const char *password = "abc123ab";
 
 const long utcOffsetInSeconds = - 14400; // -4 hrs with daylight harvesting, -18000 without
 
@@ -35,15 +35,13 @@ volatile byte interruptCounter = 0;
 volatile unsigned long clockCount;
 volatile unsigned long lastClockCount;
 unsigned long thisClockCount;
-unsigned long revoTime;
+unsigned long revoCycles;
 unsigned long i = 0;
 
 // temp
 unsigned long testStart;
 unsigned long testEnd;
 // temp
-
-unsigned long revoAvg = 0; // average clock cycles per revolution, rolling average of revoLen values
 
 // tenths
 unsigned tenths = 0;
@@ -61,7 +59,7 @@ unsigned int mins = 0;
 unsigned long minsStart = 0;
 unsigned long minsStop = 0;
 boolean minsON = false;
-int minsBrt = 105;
+int minsBrt = 85;
 
 // hours hand
 unsigned int hrs = 0;
@@ -69,6 +67,14 @@ unsigned long hrsStart = 0;
 unsigned long hrsStop = 0;
 boolean hrsON = false;
 int hrsBrt = 24;
+
+// indicators
+unsigned int ind[4] = {0};
+unsigned long indStart[4] = {0};
+unsigned long indStop[4] = {0};
+boolean indON[4] = {false};
+int indBrt = 18;
+
 
 unsigned long offset = 0;
 
@@ -101,7 +107,7 @@ void setup() {
     delay ( 500 );
     Serial.print ( "." );
   }
-    Serial.println ( "connected" );
+  Serial.println ( "connected" );
   timeClient.begin();
 }
 
@@ -110,18 +116,22 @@ void loop() {
   
   if(interruptCounter>0){
     interruptCounter--;
-    revoTime = clockCount - lastClockCount;
+    revoCycles = clockCount - lastClockCount;
     lastClockCount = clockCount;
     // testStart = ESP.getCycleCount();
-    revoAvg = revoTime;
-    // revoAvg = 4 000 000 when spinning as slow as possible
-    offset = revoAvg * 0.28; // higher = counter-clockwise shift. example: .22 = ahead by 3 sec .25 = ahead by 1 sec
+    // revoCycles = 4 000 000 when spinning as slow as possible
+    offset = revoCycles * 0.28; // higher = counter-clockwise shift. example: .22 = ahead by 3 sec .25 = ahead by 1 sec
     // testEnd = ESP.getCycleCount();
   }
 
   setHand(thisClockCount-clockCount, secStart, secStop, &secON, secBrt, minsON, minsBrt, hrsON, hrsBrt);
   setHand(thisClockCount-clockCount, minsStart, minsStop, &minsON, minsBrt, secON, secBrt, hrsON, hrsBrt);
   setHand(thisClockCount-clockCount, hrsStart, hrsStop, &hrsON, hrsBrt, secON, secBrt, minsON, minsBrt);
+
+  for(int j=0; j<4; j++){
+    //      full revo time            time on   time off  is on brightness  others
+    setHand(thisClockCount-clockCount, indStart[j], indStop[j], &indON[j], indBrt, minsON, minsBrt, hrsON, hrsBrt);
+  }
 
   // 80 000 000 = once per second
   // 8 000 000 = ten times per second
@@ -139,18 +149,23 @@ void loop() {
       else
         tenths = (tenths + 1) % 20;
 
-      secStart = wrap((revoAvg * sec)/60 - ((revoAvg/1200) * tenths) + offset, revoAvg / 480, revoAvg, false);
-      secStop  = wrap((revoAvg * sec)/60 - ((revoAvg/1200) * tenths) + offset, revoAvg / 480, revoAvg,  true);
+      secStart = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles, false);
+      secStop  = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles,  true);
 
       mins = 59 - timeClient.getMinutes();
       // mins = 0;
-      minsStart = wrap(((revoAvg * mins) / 60) + ((revoAvg * sec) / 3600) + offset, revoAvg / 120, revoAvg, false);
-      minsStop  = wrap(((revoAvg * mins) / 60) + ((revoAvg * sec) / 3600) + offset, revoAvg / 120, revoAvg, true);
+      minsStart = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, false);
+      minsStop  = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, true);
 
       hrs = 12 - (timeClient.getHours()%12);
       // hrs = 6;
-      hrsStart = wrap(((revoAvg * hrs) / 12) + ((revoAvg * mins) / 720) + ((revoAvg * sec) / 43200) + offset, revoAvg / 24, revoAvg, false);
-      hrsStop  = wrap(((revoAvg * hrs) / 12) + ((revoAvg * mins) / 720) + ((revoAvg * sec) / 43200) + offset, revoAvg / 24, revoAvg, true);
+      hrsStart = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, false);
+      hrsStop  = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, true);
+
+      for(int j=0; j<4; j++){
+        indStart[j] = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles, false);
+        indStop[j]  = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles,  true);
+      }
     }
 
     speedInput(myMotor);
