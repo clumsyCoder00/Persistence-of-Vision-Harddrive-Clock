@@ -1,6 +1,6 @@
 # Persistence of Vision Harddrive Clock  
 ## Operation  
-- Face of clock is a harddrive platter with a slot cut in it from perimeter to center of disk.  
+- Face of clock is generated with a spinning harddrive platter with a slot cut in it from perimeter to center of disk.  
 - LED array is installed behind the harddrive platter.  
 - A hall effect sensor (OH090U) triggers an external interrupt on every rotation.  
 - The microcontroller calculates the speed of the disk, and the timing for flashing the lights for the hands on each rotation.  
