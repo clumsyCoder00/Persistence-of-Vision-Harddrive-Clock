@@ -11,6 +11,11 @@
 - Using a FET (IRL540N) to flash the LEDs.  
 - Using a Electronic Speed Controller to spin the harddrive motor.  
 
+## Inspiration  
+I was inspired by these projects:  
+[Arduino HDD POV Clock](https://create.arduino.cc/projecthub/mircemk/arduino-hdd-pov-clock-persistence-of-vision-90a55a)  
+[Hard Drive Persistence of Vision (HDPOV)](https://www.instructables.com/Hard-Drive-Persistence-of-Vision-HDPOV/)  
+
 ![Finished Project](https://github.com/clumsyCoder00/Persistence-of-Vision-Harddrive-Clock/blob/main/IMG_1824.jpg?raw=true)
 
 
