@@ -7,11 +7,19 @@
 /*
 simple interrupts
 https://techtutorialsx.com/2016/12/11/esp8266-external-interrupts/#comments
+
+New sethand
+- array of start time
+- array of stop time
+- cycle through array in setHand function, start with thinnest (brightest?) element
+- if current count is in range of element in array, set pwm to brightness of current array element
+- jump out of cycle when current count is found to be in range of element (so that subsequent elements don't over-write brighter element)
+- if through array w/o jumping out, turn off led
 */
 
 // wireless network data
-const char *ssid     = "SSID";
-const char *password = "PASSWORD";
+const char *ssid     = "watkins";
+const char *password = "abc123ab";
 
 const long utcOffsetInSeconds = - 14400; // -4 hrs with daylight harvesting, -18000 without
 
@@ -20,8 +28,10 @@ const byte LEDpin = 12; //D6
 const byte interruptPin = 4; // D2
 const byte servoPin = 2; // D4
 
+unsigned long hands[7][3];
+
 void IRAM_ATTR detectsRev ();
-void setHand(unsigned long, unsigned long, unsigned long, boolean*, int, boolean, int, boolean, int);
+void setHand(unsigned long, long unsigned int (*)[7][3]);
 unsigned long movingAvg(unsigned long*, unsigned long*, uint8_t, uint16_t, unsigned long);
 unsigned long wrap(unsigned long, unsigned long, unsigned long, boolean);
 void speedInput(Servo&);
@@ -38,44 +48,11 @@ unsigned long thisClockCount;
 unsigned long revoCycles;
 unsigned long i = 0;
 
-// temp
-unsigned long testStart;
-unsigned long testEnd;
-// temp
-
-// tenths
-unsigned tenths = 0;
+unsigned tenths = 0;      // tenths
 unsigned lastSec = 0;
-
-// seconds hand
-unsigned int sec = 0;       // store time - seconds
-unsigned long secStart = 0; // cycles from reference to turn on LED
-unsigned long secStop = 0;  // cycles from reference to turn off LED
-boolean secON = false;      // is the LED on?
-int secBrt = 1023;          // pwm value for hand brightness
-
-// minutes hand
-unsigned int mins = 0;
-unsigned long minsStart = 0;
-unsigned long minsStop = 0;
-boolean minsON = false;
-int minsBrt = 85;
-
-// hours hand
-unsigned int hrs = 0;
-unsigned long hrsStart = 0;
-unsigned long hrsStop = 0;
-boolean hrsON = false;
-int hrsBrt = 24;
-
-// indicators
-unsigned int ind[4] = {0};
-unsigned long indStart[4] = {0};
-unsigned long indStop[4] = {0};
-boolean indON[4] = {false};
-int indBrt = 18;
-
-
+unsigned int sec = 0;     // seconds hand
+unsigned int mins = 0;    // minutes hand
+unsigned int hrs = 0;     // hours hand
 unsigned long offset = 0;
 
 // NTPClient
@@ -85,6 +62,14 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 
 void setup() {
+  hands[0][2] = 1023;
+  hands[1][2] = 85;
+  hands[2][2] = 24;
+  hands[3][2] = 12;
+  hands[4][2] = 12;
+  hands[5][2] = 12;
+  hands[6][2] = 12;
+
   Serial.begin(115200);
   myMotor.attach(servoPin);
   pinMode(interruptPin, INPUT_PULLUP);
@@ -118,20 +103,11 @@ void loop() {
     interruptCounter--;
     revoCycles = clockCount - lastClockCount;
     lastClockCount = clockCount;
-    // testStart = ESP.getCycleCount();
     // revoCycles = 4 000 000 when spinning as slow as possible
     offset = revoCycles * 0.28; // higher = counter-clockwise shift. example: .22 = ahead by 3 sec .25 = ahead by 1 sec
-    // testEnd = ESP.getCycleCount();
   }
 
-  setHand(thisClockCount-clockCount, secStart, secStop, &secON, secBrt, minsON, minsBrt, hrsON, hrsBrt);
-  setHand(thisClockCount-clockCount, minsStart, minsStop, &minsON, minsBrt, secON, secBrt, hrsON, hrsBrt);
-  setHand(thisClockCount-clockCount, hrsStart, hrsStop, &hrsON, hrsBrt, secON, secBrt, minsON, minsBrt);
-
-  for(int j=0; j<4; j++){
-    //      full revo time            time on   time off  is on brightness  others
-    setHand(thisClockCount-clockCount, indStart[j], indStop[j], &indON[j], indBrt, minsON, minsBrt, hrsON, hrsBrt);
-  }
+  setHand(thisClockCount-clockCount, &hands);
 
   // 80 000 000 = once per second
   // 8 000 000 = ten times per second
@@ -149,29 +125,61 @@ void loop() {
       else
         tenths = (tenths + 1) % 20;
 
-      secStart = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles, false);
-      secStop  = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles,  true);
+      hands[0][0] = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles, false);
+      hands[0][1] = wrap((revoCycles * sec)/60 - ((revoCycles/1200) * tenths) + offset, revoCycles / 360, revoCycles,  true);
 
       mins = 59 - timeClient.getMinutes();
-      // mins = 0;
-      minsStart = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, false);
-      minsStop  = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, true);
+      // // mins = 0;
+      hands[1][0] = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, false);
+      hands[1][1] = wrap(((revoCycles * mins) / 60) + ((revoCycles * sec) / 3600) + offset, revoCycles / 120, revoCycles, true);
 
       hrs = 12 - (timeClient.getHours()%12);
       // hrs = 6;
-      hrsStart = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, false);
-      hrsStop  = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, true);
+      hands[2][0] = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, false);
+      hands[2][1] = wrap(((revoCycles * hrs) / 12) + ((revoCycles * mins) / 720) + ((revoCycles * sec) / 43200) + offset, revoCycles / 24, revoCycles, true);
 
-      for(int j=0; j<4; j++){
-        indStart[j] = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles, false);
-        indStop[j]  = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles,  true);
+      for(int j=3; j<7; j++){
+        hands[j][0] = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles, false);
+        hands[j][1]  = wrap((revoCycles * j * 15/60) + offset, revoCycles / 360, revoCycles,  true);
       }
     }
 
     speedInput(myMotor);
-    // Serial.print("test: ");
-    // Serial.println(testEnd - testStart);
   }
+}
+
+/* hands
+0 - seconds
+1 - minutes
+2 - hours
+3 - ind 0
+4 - ind 1
+5 - ind 2
+6 - ind 3
+
+0 - secStart
+1 - secStop
+2 - brightness
+3 - isON
+*/
+void setHand(unsigned long timeAtCall, unsigned long(*hands)[7][3]){
+  unsigned long brightness = 0;
+
+  for(int i = 6; i>=0; i--){
+    if((*hands)[i][0] < (*hands)[i][1]){
+      if(timeAtCall >= (*hands)[i][0] && timeAtCall < (*hands)[i][1])
+        brightness = (*hands)[i][2];
+    }
+    else{
+      if(timeAtCall >= (*hands)[i][0] || timeAtCall < (*hands)[i][1])
+        brightness = (*hands)[i][2];
+    }
+  }
+
+  if(brightness == 0)
+    digitalWrite(LEDpin, LOW);
+  else
+    analogWrite(LEDpin, brightness); 
 }
 
 unsigned long wrap(unsigned long center, unsigned long wing, unsigned long ceiling, boolean additive){
@@ -200,57 +208,15 @@ unsigned long wrap(unsigned long center, unsigned long wing, unsigned long ceili
     return sum;
 }
 
-void setHand(unsigned long timeAtCall, unsigned long startTime, unsigned long stopTime, boolean *isON, int bright, boolean other1ON, int other1Brt, boolean other2ON, int other2Brt){
-  if(startTime < stopTime){
-    if(timeAtCall >= startTime && timeAtCall < stopTime){
-      if(!*isON){
-        analogWrite(LEDpin, bright);
-        *isON = true;
-      }
-    }
-    else{
-      if(*isON){
-        *isON = false;
-          if(!other1ON && !other2ON)
-            digitalWrite(LEDpin, LOW);
-          else if (other1ON)
-            analogWrite(LEDpin, other1Brt);
-          else
-            analogWrite(LEDpin, other2Brt);
-      }
-    }
-  }
-
-  else{
-    if(timeAtCall >= startTime || timeAtCall < stopTime){
-      if(!*isON){
-        analogWrite(LEDpin, bright);
-        *isON = true;
-      }
-    }
-    else{
-      if(*isON){
-        *isON = false;
-          if(!other1ON && !other2ON)
-            digitalWrite(LEDpin, LOW);
-          else if (other1ON)
-            analogWrite(LEDpin, other1Brt);
-          else
-            analogWrite(LEDpin, other2Brt);
-      }
-    }
+void speedInput(Servo& myMotor) {
+  int val = map(analogRead(A0),1023,0,58,180);
+  if (val != lastVal){
+    lastVal = val;
+    myMotor.write(val);
   }
 }
 
 IRAM_ATTR void detectsRev() {
   interruptCounter++;
   clockCount=ESP.getCycleCount();
-}
-
-void speedInput(Servo& myMotor) {
-  int val = map(analogRead(A0),1024,7,54,180);
-  if (val != lastVal){
-    lastVal = val;
-    myMotor.write(val);
-  }
 }
